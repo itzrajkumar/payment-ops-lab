@@ -1,37 +1,48 @@
 import json
-import subprocess
-import time
+import threading
 import unittest
 import urllib.request
+
+from app import create_server
 
 
 class PaymentServiceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = subprocess.Popen(
-            ["python3", "app.py"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        # Port 0 asks the operating system to choose an available port.
+        cls.server = create_server(port=0)
+        cls.port = cls.server.server_address[1]
+
+        cls.server_thread = threading.Thread(
+            target=cls.server.serve_forever,
+            daemon=True
         )
-        time.sleep(1)
+        cls.server_thread.start()
 
     @classmethod
     def tearDownClass(cls):
-        cls.server.terminate()
-        cls.server.wait()
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.server_thread.join()
 
     def test_health_endpoint(self):
-        with urllib.request.urlopen("http://localhost:8000/health") as response:
+        url = f"http://127.0.0.1:{self.port}/health"
+
+        with urllib.request.urlopen(url) as response:
             data = json.loads(response.read())
-            self.assertEqual(response.status, 200)
-            self.assertEqual(data["status"], "ok")
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(data["status"], "ok")
 
     def test_payment_endpoint(self):
-        with urllib.request.urlopen("http://localhost:8000/payment") as response:
+        url = f"http://127.0.0.1:{self.port}/payment"
+
+        with urllib.request.urlopen(url) as response:
             data = json.loads(response.read())
-            self.assertEqual(response.status, 200)
-            self.assertIn(data["status"], ["approved", "declined", "failed"])
-            self.assertIn("payment_id", data)
+
+        self.assertEqual(response.status, 200)
+        self.assertIn(data["status"], ["approved", "declined", "failed"])
+        self.assertIn("payment_id", data)
 
 
 if __name__ == "__main__":

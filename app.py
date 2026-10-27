@@ -21,7 +21,6 @@ class PaymentHandler(BaseHTTPRequestHandler):
                 ["approved", "declined", "failed"],
                 weights=[80, 15, 5]
             )[0]
-
             self.send_json(200, {
                 "payment_id": random.randint(10000, 99999),
                 "status": outcome
@@ -29,10 +28,12 @@ class PaymentHandler(BaseHTTPRequestHandler):
         else:
             self.send_json(404, {"error": "Try /health or /payment"})
 
-    def log_message(self, format, *args):
-        print(f"Request: {self.path} - {args[1]}")
+
+def create_server(port=8000):
+    return HTTPServer(("127.0.0.1", port), PaymentHandler)
 
 
-server = HTTPServer(("0.0.0.0", 8000), PaymentHandler)
-print("Payment simulator listening on port 8000")
-server.serve_forever()
+if __name__ == "__main__":
+    server = create_server()
+    print("Payment simulator listening on port 8000")
+    server.serve_forever()
