@@ -3,6 +3,13 @@ import json
 import random
 
 
+payment_counts = {
+    "approved": 0,
+    "declined": 0,
+    "failed": 0,
+}
+
+
 class PaymentHandler(BaseHTTPRequestHandler):
     def send_json(self, status_code, response):
         self.send_response(status_code)
@@ -14,23 +21,58 @@ class PaymentHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self.send_json(200, {
                 "status": "ok",
-                "service": "payment-simulator"
+                "service": "payment-simulator",
             })
+
         elif self.path == "/payment":
             outcome = random.choices(
                 ["approved", "declined", "failed"],
-                weights=[80, 15, 5]
+                weights=[80, 15, 5],
             )[0]
+            payment_id = random.randint(10000, 99999)
+
+            # Count this simulated payment under its outcome.
+            payment_counts[outcome] += 1
+
             self.send_json(200, {
-                "payment_id": random.randint(10000, 99999),
-                "status": outcome
+                "payment_id": payment_id,
+                "status": outcome,
             })
+
+            print(
+                f"event=payment_processed "
+                f"payment_id={payment_id} "
+                f"status={outcome}",
+                flush=True,
+            )
+
+        elif self.path == "/metrics":
+            metrics = "\n".join([
+                "# HELP payment_transactions_total Total simulated payments by status",
+                "# TYPE payment_transactions_total counter",
+                f'payment_transactions_total{{status="approved"}} {payment_counts["approved"]}',
+                f'payment_transactions_total{{status="declined"}} {payment_counts["declined"]}',
+                f'payment_transactions_total{{status="failed"}} {payment_counts["failed"]}',
+                "",
+            ])
+
+            self.send_response(200)
+            self.send_header(
+                "Content-Type",
+                "text/plain; version=0.0.4; charset=utf-8",
+            )
+            self.end_headers()
+            self.wfile.write(metrics.encode())
+
         else:
-            self.send_json(404, {"error": "Try /health or /payment"})
+            self.send_json(404, {
+                "error": "Try /health, /payment, or /metrics",
+            })
 
 
 def create_server(port=8000):
-    return HTTPServer(("127.0.0.1", port), PaymentHandler)
+    # Listen on all interfaces so Docker can forward traffic to this app.
+    return HTTPServer(("0.0.0.0", port), PaymentHandler)
 
 
 if __name__ == "__main__":
