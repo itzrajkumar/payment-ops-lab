@@ -86,6 +86,32 @@ The payment counters are held in the simulator's memory and reset when the simul
 
 The Grafana alert rule monitors failed payments. Its state can be viewed in Grafana under **Alerting → Alert rules**. This local learning setup does not have an external notification contact point configured.
 
+## Reliability target for this lab
+
+**SLI:** The percentage of simulated payment outcomes with status `failed` in a rolling five-minute window.
+
+**SLO:** For this learning project, keep the failed-outcome rate at or below 5% over that window when there is enough test traffic. This is a lab target based on the simulator's normal 5% failure setting, not a production standard.
+
+Prometheus query for the failed-outcome rate as a percentage:
+
+```promql
+100 * sum(increase(payment_transactions_total{status="failed"}[5m]))
+    / sum(increase(payment_transactions_total[5m]))
+
+
+
+SLI: Percentage of simulated payment outcomes marked failed over a rolling five-minute window.
+
+SLO: Keep that rate at or below 5% during lab exercises with recent test traffic.
+
+Alert: Grafana fires when the rate stays above 10% for one minute.
+
+Query:
+100 * sum(increase(payment_transactions_total{status="failed"}[5m]))
+    / sum(increase(payment_transactions_total[5m]))
+
+his measures simulated payment outcomes, not service availability. The simulator returns HTTP 200 even when an outcome is failed. With no recent requests, the percentage can be undefined, so generate test traffic before evaluating it.
+
 ## Automated tests
 
 Run the tests locally with:
