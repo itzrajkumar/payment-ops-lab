@@ -2,26 +2,27 @@
 
 A beginner DevOps and SRE project that simulates a payment service and monitors its operational behavior locally.
 
-This project uses fake transactions only. It does not process real payments or use customer data.
+This project uses synthetic transactions only. It does not process real payments or use customer data.
 
 ## What it does
 
-- Returns simulated payment outcomes: approved, declined, or failed
+- Simulates payment outcomes: approved, declined, or failed
 - Provides a health endpoint
-- Writes a log entry for each simulated payment
+- Logs each simulated payment
 - Exposes payment outcome counters in Prometheus format
-- Runs in Docker Compose with Prometheus and Grafana
-- Uses GitHub Actions to run automated tests
+- Runs the simulator, Prometheus, and Grafana with Docker Compose
+- Uses GitHub Actions to run automated tests on pushes and pull requests
+- Includes a Grafana alert for a high simulated payment failure rate
 
 ## Architecture
 
 ```text
-Browser
+Client
   ├── Payment simulator: http://localhost:8000
   ├── Prometheus:         http://localhost:9090
   └── Grafana:            http://localhost:3000
 
-Prometheus scrapes the payment simulator's /metrics endpoint.
+Prometheus scrapes the simulator's /metrics endpoint.
 Grafana queries Prometheus and displays the metrics.
 ```
 
@@ -50,21 +51,27 @@ docker compose down
 
 ## Service endpoints
 
-| Endpoint | Purpose |
-|---|---|
-| [http://localhost:8000/health](http://localhost:8000/health) | Checks whether the simulator is responding |
-| [http://localhost:8000/payment](http://localhost:8000/payment) | Returns one fake payment result |
-| [http://localhost:8000/metrics](http://localhost:8000/metrics) | Shows payment counters in Prometheus format |
-| [http://localhost:9090](http://localhost:9090) | Opens the Prometheus interface |
-| [http://localhost:3000](http://localhost:3000) | Opens the Grafana interface |
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | [http://localhost:8000/health](http://localhost:8000/health) | Checks whether the simulator is responding |
+| `POST` | `http://localhost:8000/payment` | Returns one fake payment result |
+| `GET` | [http://localhost:8000/metrics](http://localhost:8000/metrics) | Shows payment counters in Prometheus format |
+| `GET` | [http://localhost:9090](http://localhost:9090) | Opens the Prometheus interface |
+| `GET` | [http://localhost:3000](http://localhost:3000) | Opens the Grafana interface |
 
 Payment results are randomly generated using an 80% approved, 15% declined, and 5% failed distribution.
+
+To send a simulated payment from a terminal:
+
+```bash
+curl -X POST http://localhost:8000/payment
+```
 
 ## Monitoring
 
 Prometheus reads the simulator's `/metrics` endpoint every five seconds. Grafana uses Prometheus as its data source to display the payment counters.
 
-Example Prometheus query for payment counts by outcome:
+Example Prometheus query for counts by outcome:
 
 ```promql
 payment_transactions_total
@@ -76,41 +83,32 @@ Total simulated payments across all outcomes:
 sum(payment_transactions_total)
 ```
 
-Failed payments detected in the last minute:
+Failed-outcome percentage over the last five minutes:
 
 ```promql
-increase(payment_transactions_total{status="failed"}[1m])
+100 * sum(increase(payment_transactions_total{status="failed"}[5m]))
+    / sum(increase(payment_transactions_total[5m]))
 ```
 
 The payment counters are held in the simulator's memory and reset when the simulator restarts.
 
-The Grafana alert rule monitors failed payments. Its state can be viewed in Grafana under **Alerting → Alert rules**. This local learning setup does not have an external notification contact point configured.
-
 ## Reliability target for this lab
 
-**SLI:** The percentage of simulated payment outcomes with status `failed` in a rolling five-minute window.
+- **SLI:** Percentage of simulated payment outcomes with status `failed` over a rolling five-minute window.
+- **SLO:** Keep the failed-outcome rate at or below 5% during lab exercises with recent test traffic.
+- **Alert:** Grafana fires when the five-minute failed-outcome rate stays above 10% for one minute. The rule is evaluated every 10 seconds.
 
-**SLO:** For this learning project, keep the failed-outcome rate at or below 5% over that window when there is enough test traffic. This is a lab target based on the simulator's normal 5% failure setting, not a production standard.
+These are learning values based on the simulator's normal 5% failure setting, not production financial-service standards. The SLI measures simulated outcomes, not service availability: the simulator returns HTTP 200 even when the outcome is `failed`.
 
-Prometheus query for the failed-outcome rate as a percentage:
+A percentage cannot be calculated when there have been no recent transactions. Generate test traffic before evaluating the five-minute SLI.
 
-```promql
-100 * sum(increase(payment_transactions_total{status="failed"}[5m]))
-    / sum(increase(payment_transactions_total[5m]))
+To send 100 synthetic payment requests from a Mac terminal:
 
-
-
-SLI: Percentage of simulated payment outcomes marked failed over a rolling five-minute window.
-
-SLO: Keep that rate at or below 5% during lab exercises with recent test traffic.
-
-Alert: Grafana fires when the rate stays above 10% for one minute.
-
-Query:
-100 * sum(increase(payment_transactions_total{status="failed"}[5m]))
-    / sum(increase(payment_transactions_total[5m]))
-
-his measures simulated payment outcomes, not service availability. The simulator returns HTTP 200 even when an outcome is failed. With no recent requests, the percentage can be undefined, so generate test traffic before evaluating it.
+```bash
+for i in {1..100}; do
+  curl -s -X POST http://localhost:8000/payment > /dev/null
+done
+```
 
 ## Automated tests
 
@@ -126,12 +124,12 @@ GitHub Actions runs the same tests when code is pushed or a pull request is open
 
 **Scenario:** The simulator's payment weights were temporarily changed so every simulated payment failed.
 
-**Impact:** Simulated payments returned failed outcomes. No real payments or customers were involved.
+**Impact:** Simulated payment requests returned failed outcomes. No real payments or customers were involved.
 
-**Detection:** A Grafana alert watched the failed-payment metric and changed state when failures increased.
+**Detection:** A Grafana alert detected that the failed-outcome rate exceeded the configured threshold.
 
-**Investigation:** The payment metrics and application logs were used to confirm the failed outcomes.
+**Investigation:** The Prometheus metrics and application logs were used to confirm the failures.
 
 **Recovery:** The normal payment weights were restored and the Docker Compose service was rebuilt.
 
-**Follow-up:** Keep the alert and dashboard, and verify them after future changes.
+**Follow-up:** Keep the dashboard and alert, and verify them after future changes.

@@ -15,7 +15,7 @@ class PaymentServiceTests(unittest.TestCase):
 
         cls.server_thread = threading.Thread(
             target=cls.server.serve_forever,
-            daemon=True
+            daemon=True,
         )
         cls.server_thread.start()
 
@@ -36,8 +36,9 @@ class PaymentServiceTests(unittest.TestCase):
 
     def test_payment_endpoint(self):
         url = f"http://127.0.0.1:{self.port}/payment"
+        request = urllib.request.Request(url, method="POST")
 
-        with urllib.request.urlopen(url) as response:
+        with urllib.request.urlopen(request) as response:
             data = json.loads(response.read())
 
         self.assertEqual(response.status, 200)

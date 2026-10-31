@@ -24,28 +24,6 @@ class PaymentHandler(BaseHTTPRequestHandler):
                 "service": "payment-simulator",
             })
 
-        elif self.path == "/payment":
-            outcome = random.choices(
-                ["approved", "declined", "failed"],
-                weights=[80, 15, 5],
-            )[0]
-            payment_id = random.randint(10000, 99999)
-
-            # Count this simulated payment under its outcome.
-            payment_counts[outcome] += 1
-
-            self.send_json(200, {
-                "payment_id": payment_id,
-                "status": outcome,
-            })
-
-            print(
-                f"event=payment_processed "
-                f"payment_id={payment_id} "
-                f"status={outcome}",
-                flush=True,
-            )
-
         elif self.path == "/metrics":
             metrics = "\n".join([
                 "# HELP payment_transactions_total Total simulated payments by status",
@@ -66,8 +44,34 @@ class PaymentHandler(BaseHTTPRequestHandler):
 
         else:
             self.send_json(404, {
-                "error": "Try /health, /payment, or /metrics",
+                "error": "Try GET /health, GET /metrics, or POST /payment",
             })
+
+    def do_POST(self):
+        if self.path != "/payment":
+            self.send_json(404, {"error": "Try POST /payment"})
+            return
+
+        outcome = random.choices(
+            ["approved", "declined", "failed"],
+            weights=[80, 15, 5],
+        )[0]
+        payment_id = random.randint(10000, 99999)
+
+        # Count this simulated payment under its outcome.
+        payment_counts[outcome] += 1
+
+        self.send_json(200, {
+            "payment_id": payment_id,
+            "status": outcome,
+        })
+
+        print(
+            f"event=payment_processed "
+            f"payment_id={payment_id} "
+            f"status={outcome}",
+            flush=True,
+        )
 
 
 def create_server(port=8000):
