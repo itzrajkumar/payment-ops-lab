@@ -13,6 +13,11 @@ This project uses synthetic transactions only. It does not process real payments
 - Runs the simulator, Prometheus, and Grafana with Docker Compose
 - Uses GitHub Actions to run automated tests on pushes and pull requests
 - Includes a Grafana alert for a high simulated payment failure rate
+- Demonstrates a simulated incident and recovery
+
+## Demo
+
+![Grafana dashboard during the simulated payment incident](assets/payment-incident-demo.gif)
 
 ## Architecture
 
@@ -54,17 +59,19 @@ docker compose down
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `GET` | [http://localhost:8000/health](http://localhost:8000/health) | Checks whether the simulator is responding |
-| `POST` | `http://localhost:8000/payment` | Returns one fake payment result |
+| `POST` | `http://localhost:8000/payment` | Returns one simulated payment result |
 | `GET` | [http://localhost:8000/metrics](http://localhost:8000/metrics) | Shows payment counters in Prometheus format |
 | `GET` | [http://localhost:9090](http://localhost:9090) | Opens the Prometheus interface |
 | `GET` | [http://localhost:3000](http://localhost:3000) | Opens the Grafana interface |
 
+`POST /payment` creates a simulated payment. `GET /payment` is not allowed and returns **HTTP 405 Method Not Allowed**, with `Allow: POST`.
+
 Payment results are randomly generated using an 80% approved, 15% declined, and 5% failed distribution.
 
-To send a simulated payment from a terminal:
+To send one simulated payment from a terminal:
 
 ```bash
-curl -X POST http://localhost:8000/payment
+curl -i -X POST http://localhost:8000/payment
 ```
 
 ## Monitoring
@@ -110,6 +117,8 @@ for i in {1..100}; do
 done
 ```
 
+The alert state is visible in Grafana under **Alerting → Alert rules**. This local learning setup does not have an external notification contact point configured.
+
 ## Automated tests
 
 Run the tests locally with:
@@ -117,6 +126,8 @@ Run the tests locally with:
 ```bash
 python3 -m unittest -v
 ```
+
+The tests check the health endpoint, a successful `POST /payment`, and that `GET /payment` returns HTTP 405 with `Allow: POST`.
 
 GitHub Actions runs the same tests when code is pushed or a pull request is opened.
 
@@ -128,7 +139,7 @@ GitHub Actions runs the same tests when code is pushed or a pull request is open
 
 **Detection:** A Grafana alert detected that the failed-outcome rate exceeded the configured threshold.
 
-**Investigation:** The Prometheus metrics and application logs were used to confirm the failures.
+**Investigation:** Prometheus metrics and application logs were used to confirm the failures.
 
 **Recovery:** The normal payment weights were restored and the Docker Compose service was rebuilt.
 
