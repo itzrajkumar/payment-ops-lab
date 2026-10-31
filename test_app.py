@@ -2,6 +2,7 @@ import json
 import threading
 import unittest
 import urllib.request
+from urllib.error import HTTPError
 
 from app import create_server
 
@@ -9,7 +10,7 @@ from app import create_server
 class PaymentServiceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Port 0 asks the operating system to choose an available port.
+        # Port 0 lets the operating system choose an available port.
         cls.server = create_server(port=0)
         cls.port = cls.server.server_address[1]
 
@@ -34,7 +35,7 @@ class PaymentServiceTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(data["status"], "ok")
 
-    def test_payment_endpoint(self):
+    def test_payment_endpoint_uses_post(self):
         url = f"http://127.0.0.1:{self.port}/payment"
         request = urllib.request.Request(url, method="POST")
 
@@ -44,6 +45,15 @@ class PaymentServiceTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertIn(data["status"], ["approved", "declined", "failed"])
         self.assertIn("payment_id", data)
+
+    def test_payment_get_method_not_allowed(self):
+        url = f"http://127.0.0.1:{self.port}/payment"
+
+        with self.assertRaises(HTTPError) as error:
+            urllib.request.urlopen(url)
+
+        self.assertEqual(error.exception.code, 405)
+        self.assertEqual(error.exception.headers.get("Allow"), "POST")
 
 
 if __name__ == "__main__":

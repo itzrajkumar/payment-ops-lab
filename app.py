@@ -11,9 +11,14 @@ payment_counts = {
 
 
 class PaymentHandler(BaseHTTPRequestHandler):
-    def send_json(self, status_code, response):
+    def send_json(self, status_code, response, extra_headers=None):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json")
+
+        if extra_headers:
+            for name, value in extra_headers.items():
+                self.send_header(name, value)
+
         self.end_headers()
         self.wfile.write(json.dumps(response).encode())
 
@@ -42,6 +47,13 @@ class PaymentHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(metrics.encode())
 
+        elif self.path == "/payment":
+            self.send_json(
+                405,
+                {"error": "Use POST /payment"},
+                extra_headers={"Allow": "POST"},
+            )
+
         else:
             self.send_json(404, {
                 "error": "Try GET /health, GET /metrics, or POST /payment",
@@ -57,8 +69,6 @@ class PaymentHandler(BaseHTTPRequestHandler):
             weights=[80, 15, 5],
         )[0]
         payment_id = random.randint(10000, 99999)
-
-        # Count this simulated payment under its outcome.
         payment_counts[outcome] += 1
 
         self.send_json(200, {
